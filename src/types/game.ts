@@ -216,9 +216,21 @@ export interface ClassroomGroup {
   name: string;
   color: string;
   score: number;
+  stars?: number;
+  harmony?: number;
+  currentWorld?: string;
+  currentLevelId?: number;
+  currentLevelTitle?: string;
   correctAnswers: number;
   wrongAnswers: number;
   investigationsCompleted: number;
+  timePlayedSeconds?: number;
+  startedAt?: number;
+  levelEnteredAt?: number;
+  isStuck?: boolean;
+  needsSupport?: boolean;
+  supportMessage?: string;
+  categoryStats?: Record<string, { correct: number; total: number }>;
   roles: {
     operator: string;
     ruleAnalyst: string;
@@ -227,4 +239,71 @@ export interface ClassroomGroup {
     recorder: string;
     presenter: string;
   };
+}
+
+export interface MultiRoomGroup {
+  id: string;
+  name: string;
+  color: string;
+  members: string[];
+  score: number;
+  stars: number;
+  harmony: number;
+  currentWorld: string;
+  currentLevelId: number;
+  currentLevelTitle: string;
+  hotsCorrect: number;
+  hotsAttempted: number;
+  wrongAnswers?: number;
+  defendersPlaced: number;
+  currentWave: number;
+  timePlayedSeconds: number;
+  startedAt: number;
+  levelEnteredAt: number;
+  isStuck: boolean;
+  needsSupport: boolean;
+  supportMessage?: string;
+  categoryStats: Record<string, { correct: number; total: number }>;
+  isReady: boolean;
+  lastActive: number;
+  recentAction?: string;
+}
+
+export interface ClassroomRoom {
+  code: string;
+  title: string;
+  teacherName?: string;
+  mode: 'raid' | 'tournament';
+  targetLevelId: number;
+  bossName: string;
+  bossHp: number;
+  bossMaxHp: number;
+  communityHealth: number;
+  status: 'lobby' | 'in_game' | 'finished';
+  createdAt: number;
+  groups: Record<string, MultiRoomGroup>;
+  activityLog: { id: string; timestamp: number; text: string; type: 'join' | 'attack' | 'help' | 'hots' | 'teacher' }[];
+}
+
+export interface GroupAssessmentReport {
+  groupId: string;
+  groupName: string;
+  members: string[];
+  color: string;
+  finalScore: number;
+  finalRank: number;
+  stars: number;
+  harmony: number;
+  currentWorld: string;
+  currentLevel: string;
+  questionsAnswered: number;
+  correctAnswers: number;
+  incorrectAnswers: number;
+  accuracyPercentage: number;
+  timePlayedFormatted: string;
+  strongestCompetency: string;
+  strongestPercentage: number;
+  weakestCompetency: string;
+  weakestPercentage: number;
+  statusLabel: string;
 }

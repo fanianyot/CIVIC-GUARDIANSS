@@ -19,7 +19,8 @@ import {
   X,
   Award,
   BookOpen,
-  ArrowRight
+  ArrowRight,
+  Radio
 } from 'lucide-react';
 
 interface WorldMapProps {
@@ -31,6 +32,7 @@ interface WorldMapProps {
   onOpenMultiplayer: () => void;
   onOpenMultiDeviceMabar?: () => void;
   onOpenTeacherGuide: () => void;
+  onOpenTeacherDashboard?: () => void;
 }
 
 export const WorldMap: React.FC<WorldMapProps> = ({
@@ -42,6 +44,7 @@ export const WorldMap: React.FC<WorldMapProps> = ({
   onOpenMultiplayer,
   onOpenMultiDeviceMabar,
   onOpenTeacherGuide,
+  onOpenTeacherDashboard,
 }) => {
   const getInitialWorld = (): WorldId => {
     if (unlockedLevel <= 5) return 'world1';
@@ -218,9 +221,23 @@ export const WorldMap: React.FC<WorldMapProps> = ({
             className="px-3.5 py-1.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-black text-xs flex items-center gap-1.5 shadow-md border-2 border-emerald-600 transition-transform hover:scale-105 active:scale-95 cursor-pointer"
           >
             <Users2 className="w-3.5 h-3.5" />
-            <span>Mabar (5–10 Kelompok)</span>
+            <span>Mabar Siswa (5–10 Tim)</span>
             <span className="w-2 h-2 rounded-full bg-yellow-300 animate-ping" />
           </button>
+
+          {/* Teacher Dashboard (Host Mode) */}
+          {onOpenTeacherDashboard && (
+            <button
+              onClick={() => {
+                soundManager.playButton();
+                onOpenTeacherDashboard();
+              }}
+              className="px-3.5 py-1.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md border-2 border-indigo-700 transition-transform hover:scale-105 active:scale-95 cursor-pointer"
+            >
+              <Radio className="w-3.5 h-3.5 text-emerald-300 animate-pulse" />
+              <span>Dasbor Guru (Host)</span>
+            </button>
+          )}
 
           {/* Classroom Group Role button */}
           <button

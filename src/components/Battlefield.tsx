@@ -99,12 +99,24 @@ export const Battlefield: React.FC<BattlefieldProps> = ({
   // Bonus Harmony floating toast notification
   const [bonusNotification, setBonusNotification] = useState<{ text: string; id: number } | null>(null);
 
+  // Track session HOTS accuracy for multiplayer report
+  const [hotsSessionStats, setHotsSessionStats] = useState<{ correct: number; wrong: number }>({ correct: 0, wrong: 0 });
+
   const showBonusToast = useCallback((text: string) => {
     setBonusNotification({ text, id: Date.now() });
     setTimeout(() => {
       setBonusNotification((cur) => (cur && cur.text === text ? null : cur));
     }, 3200);
   }, []);
+
+  const totalCivicScore = (civicScores.discipline || 0) + 
+                          (civicScores.responsibility || 0) + 
+                          (civicScores.respect || 0) + 
+                          (civicScores.cleanliness || 0) + 
+                          (civicScores.community || 0);
+
+  const barriersUsed = safetyBarriers.filter((b) => !b).length;
+  const currentLevelStars = barriersUsed === 0 ? 3 : barriersUsed <= 2 ? 2 : 1;
 
   useEffect(() => {
     // Start world specific BGM theme
@@ -117,11 +129,67 @@ export const Battlefield: React.FC<BattlefieldProps> = ({
       setTimeout(() => setAllyAssistanceNotice(null), 4000);
     });
 
+    const unsubTeacher = multiplayerClient.onTeacherAssist((data) => {
+      setHarmony((prev) => prev + (data.bonusHarmony || 50));
+      soundManager.playCorrect();
+      setAllyAssistanceNotice(`BIMBINGAN GURU: "${data.message}" (+${data.bonusHarmony || 50} Harmoni)`);
+      setTimeout(() => setAllyAssistanceNotice(null), 6000);
+    });
+
+    const unsubAnnounce = multiplayerClient.onTeacherAnnouncement((msg) => {
+      soundManager.playSpecial();
+      setAllyAssistanceNotice(`PENGUMUMAN GURU: ${msg}`);
+      setTimeout(() => setAllyAssistanceNotice(null), 6000);
+    });
+
+    // Initial sync
+    multiplayerClient.updateProgress({
+      currentLevelId: level.id,
+      currentLevelTitle: level.title,
+      currentWorld: level.worldId,
+      stars: currentLevelStars,
+      harmony: level.initialHarmony,
+      score: totalCivicScore,
+      currentWave: 0,
+      hotsCorrect: hotsSessionStats.correct,
+      hotsAttempted: hotsSessionStats.correct + hotsSessionStats.wrong,
+      wrongAnswers: hotsSessionStats.wrong,
+    });
+
+    const progressTimer = window.setInterval(() => {
+      multiplayerClient.updateProgress({
+        currentLevelId: level.id,
+        currentLevelTitle: level.title,
+        currentWorld: level.worldId,
+        stars: currentLevelStars,
+        harmony,
+        score: totalCivicScore,
+        currentWave,
+        hotsCorrect: hotsSessionStats.correct,
+        hotsAttempted: hotsSessionStats.correct + hotsSessionStats.wrong,
+        wrongAnswers: hotsSessionStats.wrong,
+      });
+    }, 4000);
+
     return () => {
       unsub();
+      unsubTeacher();
+      unsubAnnounce();
+      clearInterval(progressTimer);
       soundManager.stopBgm();
     };
-  }, [level.worldId, level.bossType]);
+  }, [
+    level.worldId, 
+    level.bossType, 
+    level.id, 
+    level.title, 
+    level.initialHarmony, 
+    totalCivicScore, 
+    currentLevelStars, 
+    harmony, 
+    currentWave, 
+    hotsSessionStats
+  ]);
 
   // References for animation loop & entity synchronization
   const boardRef = useRef<HTMLDivElement>(null);
@@ -374,6 +442,7 @@ export const Battlefield: React.FC<BattlefieldProps> = ({
     // Reward correct answers with bonus harmony
     setHarmony((prev) => prev + 20);
     showBonusToast('+20 Harmoni: Bonus Jawaban Tepat! ⭐');
+    setHotsSessionStats((prev) => ({ ...prev, correct: prev.correct + 1 }));
 
     // Close modal & reset selection
     setPendingDeployment(null);
@@ -397,6 +466,8 @@ export const Battlefield: React.FC<BattlefieldProps> = ({
   // On Question Answered Incorrectly
   const handleQuestionFail = (q: Question) => {
     if (!pendingDeployment) return;
+
+    setHotsSessionStats((prev) => ({ ...prev, wrong: prev.wrong + 1 }));
 
     multiplayerClient.sendAction('hots_answer', {
       correct: false,

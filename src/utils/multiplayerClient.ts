@@ -1,49 +1,28 @@
 // Multi-Device Classroom Multiplayer Client
 // Supports WebSockets with automatic REST polling fallback for school firewalls
+import { MultiRoomGroup, ClassroomRoom, GroupAssessmentReport } from '../types/game';
+import { PRESET_GROUPS } from '../data/multiplayerPresets';
 
-export interface RoomGroup {
-  id: string;
-  name: string;
-  color: string;
-  members: string[];
-  score: number;
-  stars: number;
-  hotsCorrect: number;
-  hotsAttempted: number;
-  defendersPlaced: number;
-  currentWave: number;
-  isReady: boolean;
-  lastActive: number;
-  recentAction?: string;
+export { PRESET_GROUPS };
+export type { PresetGroupInfo } from '../data/multiplayerPresets';
+
+export interface RoomProgressUpdate {
+  currentLevelId?: number;
+  currentLevelTitle?: string;
+  currentWorld?: string;
+  stars?: number;
+  harmony?: number;
+  score?: number;
+  currentWave?: number;
+  timePlayedSeconds?: number;
+  hotsCorrect?: number;
+  hotsAttempted?: number;
+  wrongAnswers?: number;
+  categoryStats?: Record<string, { correct: number; total: number }>;
+  isStuck?: boolean;
+  needsSupport?: boolean;
+  supportMessage?: string;
 }
-
-export interface ClassroomRoom {
-  code: string;
-  title: string;
-  mode: 'raid' | 'tournament';
-  targetLevelId: number;
-  bossName: string;
-  bossHp: number;
-  bossMaxHp: number;
-  communityHealth: number;
-  status: 'lobby' | 'in_game' | 'finished';
-  createdAt: number;
-  groups: Record<string, RoomGroup>;
-  activityLog: { id: string; timestamp: number; text: string; type: 'join' | 'attack' | 'help' | 'hots' }[];
-}
-
-export const PRESET_GROUPS = [
-  { id: 'kelompok_1', name: 'Kelompok 1 (Garuda Hebat)', color: '#3b82f6', icon: '🦅' },
-  { id: 'kelompok_2', name: 'Kelompok 2 (Rajawali Tangguh)', color: '#ef4444', icon: '⚡' },
-  { id: 'kelompok_3', name: 'Kelompok 3 (Merpati Damai)', color: '#10b981', icon: '🕊️' },
-  { id: 'kelompok_4', name: 'Kelompok 4 (Elang Perkasa)', color: '#f59e0b', icon: '🌟' },
-  { id: 'kelompok_5', name: 'Kelompok 5 (Cendrawasih Adil)', color: '#8b5cf6', icon: '👑' },
-  { id: 'kelompok_6', name: 'Kelompok 6 (Komodo Berani)', color: '#ec4899', icon: '🦎' },
-  { id: 'kelompok_7', name: 'Kelompok 7 (Banteng Solid)', color: '#14b8a6', icon: '🛡️' },
-  { id: 'kelompok_8', name: 'Kelompok 8 (Harimau Tanggap)', color: '#f97316', icon: '🐅' },
-  { id: 'kelompok_9', name: 'Kelompok 9 (Bekantan Ramah)', color: '#06b6d4', icon: '🤝' },
-  { id: 'kelompok_10', name: 'Kelompok 10 (Rangkong Bijak)', color: '#84cc16', icon: '📜' },
-];
 
 class MultiplayerClient {
   private ws: WebSocket | null = null;
@@ -51,6 +30,8 @@ class MultiplayerClient {
   private currentGroupId: string | null = null;
   private listeners: ((room: ClassroomRoom) => void)[] = [];
   private assistanceListeners: ((help: { fromGroupName: string; helpType: string }) => void)[] = [];
+  private teacherAssistListeners: ((data: { message: string; bonusHarmony: number }) => void)[] = [];
+  private teacherAnnouncementListeners: ((msg: string) => void)[] = [];
   private pollTimer: number | null = null;
   private isConnected: boolean = false;
 
@@ -68,7 +49,21 @@ class MultiplayerClient {
     };
   }
 
-  public async getRoomsList(): Promise<{ code: string; title: string; groupCount: number }[]> {
+  public onTeacherAssist(callback: (data: { message: string; bonusHarmony: number }) => void) {
+    this.teacherAssistListeners.push(callback);
+    return () => {
+      this.teacherAssistListeners = this.teacherAssistListeners.filter((cb) => cb !== callback);
+    };
+  }
+
+  public onTeacherAnnouncement(callback: (msg: string) => void) {
+    this.teacherAnnouncementListeners.push(callback);
+    return () => {
+      this.teacherAnnouncementListeners = this.teacherAnnouncementListeners.filter((cb) => cb !== callback);
+    };
+  }
+
+  public async getRoomsList(): Promise<{ code: string; title: string; groupCount: number; status: string }[]> {
     try {
       const res = await fetch('/api/rooms');
       if (res.ok) return await res.json();
@@ -78,15 +73,20 @@ class MultiplayerClient {
     return [];
   }
 
-  public async createOrJoinRoom(code: string, title?: string, mode?: 'raid' | 'tournament'): Promise<ClassroomRoom | null> {
+  public async createOrJoinRoom(code: string, title?: string, teacherName?: string, mode?: 'raid' | 'tournament'): Promise<ClassroomRoom | null> {
+    const cleanCode = (code || 'KELAS-4A').toUpperCase().trim();
     try {
       const res = await fetch('/api/rooms/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, title, mode }),
+        body: JSON.stringify({ code: cleanCode, title, teacherName, mode }),
       });
       if (res.ok) {
         const data = await res.json();
+        this.currentCode = cleanCode;
+        this.initWebSocket(cleanCode);
+        this.startPolling(cleanCode);
+        this.notify(data.room);
         return data.room;
       }
     } catch (err) {
@@ -132,11 +132,89 @@ class MultiplayerClient {
     return null;
   }
 
-  public async sendAction(actionType: 'hots_answer' | 'place_defender' | 'send_help' | 'send_emote' | 'host_start' | 'host_reset', payload: Record<string, unknown> = {}) {
+  public async updateProgress(progress: RoomProgressUpdate) {
     if (!this.currentCode || !this.currentGroupId) return;
 
     try {
-      const res = await fetch(`/api/rooms/${this.currentCode}/action`, {
+      const res = await fetch(`/api/rooms/${this.currentCode}/progress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          groupId: this.currentGroupId,
+          progress,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        this.notify(data.room);
+      }
+    } catch (err) {
+      console.error('Error reporting multiplayer progress:', err);
+    }
+  }
+
+  public async requestSupport(message: string) {
+    return this.sendAction('request_support', { message });
+  }
+
+  public async sendTeacherAssist(targetGroupId: string, message: string, bonusHarmony = 50) {
+    return this.sendAction('teacher_assist', { targetGroupId, message, bonusHarmony });
+  }
+
+  public async sendTeacherBroadcast(message: string) {
+    return this.sendAction('teacher_broadcast', { message });
+  }
+
+  public async hostStart() {
+    return this.sendAction('host_start');
+  }
+
+  public async hostFinish() {
+    return this.sendAction('host_finish');
+  }
+
+  public async hostReset() {
+    return this.sendAction('host_reset');
+  }
+
+  public async getAssessmentReport(code?: string): Promise<{
+    roomCode: string;
+    title: string;
+    teacherName: string;
+    totalGroups: number;
+    groupsReport: GroupAssessmentReport[];
+  } | null> {
+    const targetCode = (code || this.currentCode || 'KELAS-4A').toUpperCase().trim();
+    try {
+      const res = await fetch(`/api/rooms/${targetCode}/report`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.error('Error fetching assessment report:', err);
+    }
+    return null;
+  }
+
+  public async sendAction(
+    actionType:
+      | 'hots_answer'
+      | 'place_defender'
+      | 'send_help'
+      | 'send_emote'
+      | 'request_support'
+      | 'teacher_assist'
+      | 'teacher_broadcast'
+      | 'host_start'
+      | 'host_finish'
+      | 'host_reset',
+    payload: Record<string, unknown> = {}
+  ) {
+    const code = this.currentCode;
+    if (!code) return;
+
+    try {
+      const res = await fetch(`/api/rooms/${code}/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -154,7 +232,7 @@ class MultiplayerClient {
     }
   }
 
-  private initWebSocket(code: string, groupId: string) {
+  private initWebSocket(code: string, groupId?: string) {
     if (this.ws) {
       try {
         this.ws.close();
@@ -184,6 +262,14 @@ class MultiplayerClient {
                 cb({ fromGroupName: msg.fromGroupName, helpType: msg.helpType })
               );
             }
+          } else if (msg.type === 'teacher_assistance_received') {
+            if (msg.targetGroupId === this.currentGroupId) {
+              this.teacherAssistListeners.forEach((cb) =>
+                cb({ message: msg.message, bonusHarmony: msg.bonusHarmony })
+              );
+            }
+          } else if (msg.type === 'teacher_announcement') {
+            this.teacherAnnouncementListeners.forEach((cb) => cb(msg.message));
           }
         } catch {
           // ignore
@@ -242,3 +328,4 @@ class MultiplayerClient {
 }
 
 export const multiplayerClient = new MultiplayerClient();
+export type { MultiRoomGroup, ClassroomRoom, GroupAssessmentReport };

@@ -16,9 +16,10 @@ import { GuardianAcademy } from './components/GuardianAcademy';
 import { AchievementsModal } from './components/AchievementsModal';
 import { TeacherGuideModal } from './components/TeacherGuideModal';
 import { MultiDeviceMabarModal } from './components/MultiDeviceMabarModal';
+import { TeacherDashboard } from './components/TeacherDashboard';
 import { GameAudioControls } from './components/GameAudioControls';
 
-type ActiveView = 'map' | 'battlefield' | 'investigation' | 'multiplayer';
+type ActiveView = 'map' | 'battlefield' | 'investigation' | 'multiplayer' | 'teacher_dashboard';
 
 export default function App() {
   // Persistence state loaders
@@ -96,6 +97,16 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('civic_achievements', JSON.stringify(achievements));
   }, [achievements]);
+
+  // Handle URL query parameters for fast classroom onboarding
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('teacher') === 'true' || params.get('host') === 'true') {
+      setActiveView('teacher_dashboard');
+    } else if (params.get('room') || params.get('mabar') === 'true') {
+      setIsMultiDeviceMabarOpen(true);
+    }
+  }, []);
 
   // Check achievements progress
   useEffect(() => {
@@ -222,6 +233,7 @@ export default function App() {
           onOpenMultiplayer={() => setActiveView('multiplayer')}
           onOpenMultiDeviceMabar={() => setIsMultiDeviceMabarOpen(true)}
           onOpenTeacherGuide={() => setIsTeacherGuideOpen(true)}
+          onOpenTeacherDashboard={() => setActiveView('teacher_dashboard')}
         />
       )}
 
@@ -248,6 +260,13 @@ export default function App() {
         <ClassroomMultiplayer
           onStartGroupGame={handleStartGroupGame}
           onOpenMultiDeviceMabar={() => setIsMultiDeviceMabarOpen(true)}
+          onOpenTeacherDashboard={() => setActiveView('teacher_dashboard')}
+          onBack={() => setActiveView('map')}
+        />
+      )}
+
+      {activeView === 'teacher_dashboard' && (
+        <TeacherDashboard
           onBack={() => setActiveView('map')}
         />
       )}

@@ -18,6 +18,7 @@ import {
 interface ClassroomMultiplayerProps {
   onStartGroupGame: (group: ClassroomGroup) => void;
   onOpenMultiDeviceMabar?: () => void;
+  onOpenTeacherDashboard?: () => void;
   onBack: () => void;
 }
 
@@ -95,6 +96,7 @@ const DEFAULT_GROUPS: ClassroomGroup[] = [
 export const ClassroomMultiplayer: React.FC<ClassroomMultiplayerProps> = ({
   onStartGroupGame,
   onOpenMultiDeviceMabar,
+  onOpenTeacherDashboard,
   onBack,
 }) => {
   const [roomCode, setRoomCode] = useState('PANCASILA4A');
@@ -184,17 +186,29 @@ export const ClassroomMultiplayer: React.FC<ClassroomMultiplayerProps> = ({
           </div>
         </div>
 
-        {/* Multi-Device Mabar Button */}
-        {onOpenMultiDeviceMabar && (
-          <button
-            onClick={onOpenMultiDeviceMabar}
-            className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white font-black text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/30 border border-indigo-400/40 transition-all hover:scale-102"
-          >
-            <Users2 className="w-4 h-4" />
-            <span>Mabar Multi-Device (5–10 Kelompok)</span>
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-          </button>
-        )}
+        {/* Teacher Dashboard & Multi-Device Buttons */}
+        <div className="flex items-center gap-2">
+          {onOpenTeacherDashboard && (
+            <button
+              onClick={onOpenTeacherDashboard}
+              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-black text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/30 border border-indigo-400/40 transition-all hover:scale-102"
+            >
+              <Crown className="w-4 h-4 text-amber-300" />
+              <span>Dasbor Guru (Host)</span>
+            </button>
+          )}
+
+          {onOpenMultiDeviceMabar && (
+            <button
+              onClick={onOpenMultiDeviceMabar}
+              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/30 border border-emerald-400/40 transition-all hover:scale-102"
+            >
+              <Users2 className="w-4 h-4" />
+              <span>Mabar Multi-Device (5–10 Kelompok)</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            </button>
+          )}
+        </div>
 
         {/* Room Code Card */}
         <div className="flex items-center gap-3 bg-slate-900 border border-slate-700/80 px-4 py-2.5 rounded-2xl shadow-md">

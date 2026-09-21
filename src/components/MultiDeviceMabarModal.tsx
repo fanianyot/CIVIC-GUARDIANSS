@@ -43,12 +43,11 @@ export function MultiDeviceMabarModal({ onStartBattle, onClose }: MultiDeviceMab
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const codeParam = params.get('room');
-    if (codeParam) {
-      setRoomCodeInput(codeParam.toUpperCase());
-    }
+    const targetCode = codeParam ? codeParam.toUpperCase() : 'KELAS-4A';
+    setRoomCodeInput(targetCode);
 
-    // Auto-fetch default room
-    multiplayerClient.createOrJoinRoom('GARUDA').then((r) => {
+    // Auto-fetch room
+    multiplayerClient.createOrJoinRoom(targetCode).then((r) => {
       if (r) setRoom(r);
     });
 

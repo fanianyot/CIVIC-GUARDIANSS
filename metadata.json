@@ -1,0 +1,6 @@
+{
+  "name": "Civic Guardians: Defend the Community",
+  "description": "Educational tower-defense strategy game for Grade 4 Pendidikan Pancasila (Aku Anak yang Disiplin: Aturan di Lingkungan Sekitar) with tactical lane battles, HOTS questions, investigation reports, and classroom multiplayer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

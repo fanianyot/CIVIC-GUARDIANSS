@@ -53,35 +53,53 @@ export { PRESET_GROUPS };
 
 const rooms: Record<string, ClassroomRoom> = {};
 
-// Default initial room
-const INITIAL_ROOM_CODE = 'KELAS-4A';
-rooms[INITIAL_ROOM_CODE] = {
-  code: INITIAL_ROOM_CODE,
-  title: 'Kelas 4A: Civic Guardians Multi-Kelompok',
-  teacherName: 'Ibu Guru Pancasila',
-  mode: 'tournament',
-  targetLevelId: 1,
-  bossName: 'Lord of Chaos & Armada Anarki',
-  bossHp: 8000,
-  bossMaxHp: 8000,
-  communityHealth: 100,
-  status: 'lobby',
-  createdAt: Date.now(),
-  groups: {},
-  activityLog: [
-    {
-      id: 'init_1',
-      timestamp: Date.now(),
-      text: 'Ruang Kelas KELAS-4A siap digunakan. Silakan kelompok 1–10 bergabung!',
-      type: 'join',
-    },
-  ],
-};
+export function normalizeRoomCode(raw: string): string {
+  if (!raw) return 'KELAS-4A';
+  return raw.toUpperCase().trim().replace(/\s+/g, '');
+}
+
+export function getOrCreateRoom(rawCode: string, title?: string, teacherName?: string): ClassroomRoom {
+  const cleanCode = normalizeRoomCode(rawCode);
+  if (!rooms[cleanCode]) {
+    rooms[cleanCode] = {
+      code: cleanCode,
+      title: title || `Kelas ${cleanCode}: Civic Guardians Multi-Kelompok`,
+      teacherName: teacherName || 'Ibu Guru Pancasila',
+      mode: 'tournament',
+      targetLevelId: 1,
+      bossName: 'Lord of Chaos & Armada Anarki',
+      bossHp: 8000,
+      bossMaxHp: 8000,
+      communityHealth: 100,
+      status: 'lobby',
+      createdAt: Date.now(),
+      groups: {},
+      activityLog: [
+        {
+          id: `init_${cleanCode}_${Date.now()}`,
+          timestamp: Date.now(),
+          text: `Ruang Kelas ${cleanCode} siap digunakan! Silakan kelompok 1–10 bergabung.`,
+          type: 'join',
+        },
+      ],
+    };
+  } else {
+    if (title) rooms[cleanCode].title = title;
+    if (teacherName) rooms[cleanCode].teacherName = teacherName;
+  }
+  return rooms[cleanCode];
+}
+
+// Pre-initialize popular and requested classroom room codes so they are instantly ready
+['KELAS-4A', 'KELAS-4B', 'KELAS-4C', '4A', '4B', '4C', '4D', 'IVC-PANCASILA', 'CG-12345'].forEach((code) => {
+  getOrCreateRoom(code);
+});
 
 // Client WebSocket tracking
 const roomClients = new Map<string, Set<WebSocket>>();
 
-function broadcastRoom(code: string, payload: unknown) {
+function broadcastRoom(rawCode: string, payload: unknown) {
+  const code = normalizeRoomCode(rawCode);
   const clients = roomClients.get(code);
   if (!clients) return;
   const msg = JSON.stringify(payload);
@@ -202,46 +220,16 @@ async function startServer() {
   // Create or retrieve room (Teacher host or student)
   app.post('/api/rooms/create', (req, res) => {
     const { code, title, teacherName, mode, targetLevelId } = req.body;
-    const cleanCode = (code || `CG-${Math.floor(1000 + Math.random() * 9000)}`).toUpperCase().trim();
-
-    if (!rooms[cleanCode]) {
-      rooms[cleanCode] = {
-        code: cleanCode,
-        title: title || `Kelas 4: Misi Ketertiban (${cleanCode})`,
-        teacherName: teacherName || 'Guru Pembimbing',
-        mode: mode || 'tournament',
-        targetLevelId: targetLevelId || 1,
-        bossName: 'Lord of Chaos & Armada Anarki',
-        bossHp: 8000,
-        bossMaxHp: 8000,
-        communityHealth: 100,
-        status: 'lobby',
-        createdAt: Date.now(),
-        groups: {},
-        activityLog: [
-          {
-            id: `log_${Date.now()}`,
-            timestamp: Date.now(),
-            text: `Ruang Mabar ${cleanCode} berhasil dibuka untuk 2–10 kelompok!`,
-            type: 'join',
-          },
-        ],
-      };
-    } else if (title || teacherName) {
-      if (title) rooms[cleanCode].title = title;
-      if (teacherName) rooms[cleanCode].teacherName = teacherName;
-    }
-
-    res.json({ success: true, room: rooms[cleanCode] });
+    const room = getOrCreateRoom(code, title, teacherName);
+    if (mode) room.mode = mode;
+    if (targetLevelId) room.targetLevelId = targetLevelId;
+    broadcastRoom(room.code, { type: 'room_update', room });
+    res.json({ success: true, room });
   });
 
-  // Get specific room status
+  // Get specific room status (never 404s, auto-creates room)
   app.get('/api/rooms/:code', (req, res) => {
-    const code = req.params.code.toUpperCase().trim();
-    const room = rooms[code];
-    if (!room) {
-      return res.status(404).json({ error: 'Ruangan tidak ditemukan' });
-    }
+    const room = getOrCreateRoom(req.params.code);
 
     // Auto check for stuck groups: level duration > 240 seconds (4 minutes)
     const now = Date.now();
@@ -254,13 +242,10 @@ async function startServer() {
     res.json(room);
   });
 
-  // Join group in room
+  // Join group in room (never 404s, auto-creates room if not yet created)
   app.post('/api/rooms/:code/join', (req, res) => {
-    const code = req.params.code.toUpperCase().trim();
-    const room = rooms[code];
-    if (!room) {
-      return res.status(404).json({ error: 'Ruangan tidak ditemukan' });
-    }
+    const room = getOrCreateRoom(req.params.code);
+    const code = room.code;
 
     const { groupId, groupName, members } = req.body;
     const defaultMeta = PRESET_GROUPS.find((g) => g.id === groupId) || {
@@ -310,7 +295,11 @@ async function startServer() {
       if (members && members.length > 0) {
         room.groups[groupId].members = members;
       }
+      if (groupName) {
+        room.groups[groupId].name = groupName;
+      }
       room.groups[groupId].lastActive = Date.now();
+      broadcastRoom(code, { type: 'room_update', room });
     }
 
     res.json({ success: true, group: room.groups[groupId], room });
@@ -318,16 +307,45 @@ async function startServer() {
 
   // Update live progress from playing devices
   app.post('/api/rooms/:code/progress', (req, res) => {
-    const code = req.params.code.toUpperCase().trim();
-    const room = rooms[code];
-    if (!room) {
-      return res.status(404).json({ error: 'Ruangan tidak ditemukan' });
-    }
+    const room = getOrCreateRoom(req.params.code);
+    const code = room.code;
 
     const { groupId, progress } = req.body;
-    const group = room.groups[groupId];
+    let group = room.groups[groupId];
     if (!group) {
-      return res.status(400).json({ error: 'Kelompok belum terdaftar' });
+      // Auto-register group if needed
+      const defaultMeta = PRESET_GROUPS.find((g) => g.id === groupId) || {
+        id: groupId || 'kelompok_1',
+        name: 'Kelompok Siswa',
+        color: '#3b82f6',
+      };
+      room.groups[groupId] = {
+        id: groupId,
+        name: defaultMeta.name,
+        color: defaultMeta.color,
+        members: ['Anggota Kelompok'],
+        score: 0,
+        stars: 0,
+        harmony: 200,
+        currentWorld: 'world1',
+        currentLevelId: 1,
+        currentLevelTitle: 'Level 1: Make Your Bed',
+        hotsCorrect: 0,
+        hotsAttempted: 0,
+        wrongAnswers: 0,
+        defendersPlaced: 0,
+        currentWave: 1,
+        timePlayedSeconds: 0,
+        startedAt: Date.now(),
+        levelEnteredAt: Date.now(),
+        isStuck: false,
+        needsSupport: false,
+        categoryStats: {},
+        isReady: true,
+        lastActive: Date.now(),
+        recentAction: 'Telah bergabung!',
+      };
+      group = room.groups[groupId];
     }
 
     group.lastActive = Date.now();
@@ -366,11 +384,8 @@ async function startServer() {
 
   // Action events (HOTS answers, help requests, teacher interventions)
   app.post('/api/rooms/:code/action', (req, res) => {
-    const code = req.params.code.toUpperCase().trim();
-    const room = rooms[code];
-    if (!room) {
-      return res.status(404).json({ error: 'Ruangan tidak ditemukan' });
-    }
+    const room = getOrCreateRoom(req.params.code);
+    const code = room.code;
 
     const { actionType, groupId, payload } = req.body;
     const group = groupId ? room.groups[groupId] : null;
@@ -507,11 +522,7 @@ async function startServer() {
 
   // End of Game Assessment Report API
   app.get('/api/rooms/:code/report', (req, res) => {
-    const code = req.params.code.toUpperCase().trim();
-    const room = rooms[code];
-    if (!room) {
-      return res.status(404).json({ error: 'Ruangan tidak ditemukan' });
-    }
+    const room = getOrCreateRoom(req.params.code);
 
     const report = computeCompetencyReport(room.groups);
     res.json({
@@ -538,7 +549,7 @@ async function startServer() {
 
         if (message.type === 'subscribe_room') {
           const { code } = message;
-          const cleanCode = (code || '').toUpperCase().trim();
+          const cleanCode = normalizeRoomCode(code);
           if (!cleanCode) return;
           currentCode = cleanCode;
 
@@ -547,9 +558,8 @@ async function startServer() {
           }
           roomClients.get(cleanCode)!.add(ws);
 
-          if (rooms[cleanCode]) {
-            ws.send(JSON.stringify({ type: 'room_update', room: rooms[cleanCode] }));
-          }
+          const room = getOrCreateRoom(cleanCode);
+          ws.send(JSON.stringify({ type: 'room_update', room }));
         }
       } catch (err) {
         console.error('WebSocket parse error:', err);

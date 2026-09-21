@@ -39,10 +39,10 @@ interface TeacherDashboardProps {
   onBack: () => void;
 }
 
-const PRESET_ROOMS = ['KELAS-4A', 'KELAS-4B', 'IVC-PANCASILA', 'CG-12345'];
+const PRESET_ROOMS = ['4C', '4A', '4B', '4D', 'KELAS-4A', 'IVC-PANCASILA'];
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onBack }) => {
-  const [selectedRoomCode, setSelectedRoomCode] = useState<string>('KELAS-4A');
+  const [selectedRoomCode, setSelectedRoomCode] = useState<string>('4C');
   const [customRoomInput, setCustomRoomInput] = useState<string>('');
   const [teacherNameInput, setTeacherNameInput] = useState<string>('Ibu Guru Pancasila');
   const [room, setRoom] = useState<ClassroomRoom | null>(null);
@@ -201,6 +201,29 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onBack }) =>
             </div>
           </div>
 
+          {/* Custom Room Input */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleCreateCustomRoom();
+            }}
+            className="flex items-center gap-1 bg-slate-800/90 border border-slate-700 px-2 py-1 rounded-2xl"
+          >
+            <input
+              type="text"
+              value={customRoomInput}
+              onChange={(e) => setCustomRoomInput(e.target.value.toUpperCase())}
+              placeholder="Ketik Ruang (4C)"
+              className="w-24 px-2 py-0.5 bg-slate-900 border border-slate-700 rounded-lg text-xs font-mono font-bold text-amber-300 uppercase focus:outline-hidden"
+            />
+            <button
+              type="submit"
+              className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition"
+            >
+              Buka
+            </button>
+          </form>
+
           {/* Copy link */}
           <button
             onClick={handleCopyShareLink}
@@ -232,6 +255,39 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onBack }) =>
 
       {/* Main Body */}
       <main className="flex-1 p-4 sm:p-6 max-w-7xl mx-auto w-full space-y-6">
+        {/* Active Room Information Card */}
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-950 via-slate-900 to-slate-900 border border-indigo-500/30 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0">
+              <Radio className="w-6 h-6 text-emerald-400 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Ruang Kelas Aktif:</span>
+                <span className="px-3 py-0.5 rounded-xl bg-amber-400 text-slate-950 font-black font-mono text-sm tracking-widest shadow">
+                  {selectedRoomCode}
+                </span>
+                <span className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg font-bold">
+                  {groupsList.length} Kelompok Terhubung
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-1">
+                Beri tahu murid untuk membuka tombol <strong>Mabar Siswa (5–10 Tim)</strong> &rarr; masukkan kode <strong>{selectedRoomCode}</strong> &rarr; pilih kelompok &rarr; klik <strong>Hubungkan Device ke Kelompok</strong>.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end md:self-auto">
+            <button
+              onClick={handleCopyShareLink}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-md transition active:scale-95"
+            >
+              {copiedLink ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+              <span>{copiedLink ? 'Link Tersalin!' : `Salin Tautan Murid (?room=${selectedRoomCode})`}</span>
+            </button>
+          </div>
+        </div>
+
         {/* KPI & Instant Alert Summary Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 sm:gap-4">
           {/* Total Groups */}
